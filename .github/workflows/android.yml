@@ -1,0 +1,27 @@
+name: Сборка Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Проверить механику игры
+        run: node --test test/engine.test.js
+      - name: Подготовить Android SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Собрать и проверить подпись APK
+        run: bash android/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: random-life-apk
+          path: build/random-life.apk
+          if-no-files-found: error

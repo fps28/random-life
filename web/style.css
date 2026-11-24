@@ -1,0 +1,32 @@
+:root { color-scheme: dark; font: 16px/1.5 system-ui,sans-serif; background:#151822; color:#f8eee3; }
+* { box-sizing:border-box; }
+body { margin:0; background:radial-gradient(ellipse at 95% 0,#34302e 0,transparent 42rem); min-height:100vh; }
+.shell { max-width:42rem; margin:auto; padding:0 18px 100px; }
+header { display:flex; gap:11px; align-items:center; padding:20px 0 17px; border-bottom:1px solid #45414a; font-weight:650; }
+.mark { color:#171923; background:#f4c987; width:31px; height:31px; border-radius:10px; display:grid; place-items:center; }
+h1,h2 { font-family:Georgia,serif; line-height:1.14; font-weight:normal; }
+h1 { font-size:clamp(2.2rem,9vw,4rem); margin:8px 0 14px; overflow-wrap:anywhere; }
+h2 { font-size:1.75rem; margin:0 0 10px; }
+p { margin:0 0 15px; }
+.muted, small, dt { color:#d2c5be; }
+.intro { padding:11vh 4px 16px; }
+.meta { color:#f4c987; font-size:.88rem; }
+.identity { padding:20px 4px 0; }
+.identity h1 { font-size:2.6rem; }
+.card { background:#232631; border:1px solid #48434c; padding:20px; border-radius:20px; margin:14px 0; overflow-wrap:anywhere; }
+button { border:1px solid #635764; border-radius:13px; background:#30303e; color:inherit; font:inherit; text-align:left; padding:12px 14px; min-height:48px; cursor:pointer; }
+button:focus-visible { outline:2px solid #f4c987; outline-offset:2px; }
+button[disabled] { opacity:.7; cursor:default; }
+button small { display:block; margin-top:4px; }
+.choices { display:grid; gap:9px; }
+.primary { background:#f4c987; color:#191820; font-weight:700; }
+nav { position:fixed; bottom:0; left:0; right:0; display:flex; justify-content:center; gap:5px; background:#1d202a; border-top:1px solid #48434c; padding:8px 12px; }
+nav[hidden] { display:none; }
+nav button { text-align:center; border-color:transparent; background:transparent; width:min(32%,12rem); }
+nav button[aria-current="page"] { color:#f4c987; background:#36303a; }
+dl { margin:0; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:9px 10px; }
+dd { margin:0; text-align:right; }
+.timeline { padding:0; list-style:none; }
+.timeline li { padding:12px 0; border-bottom:1px solid #48434c; }
+.timeline p { margin:0; }
+#status { color:#f4c987; }
