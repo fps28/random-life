@@ -5,7 +5,6 @@ const notice=document.querySelector('#status');
 const key='random-life-save-v1';
 let state=null;
 let page='life';
-let last='';
 try {
   const saved=localStorage.getItem(key);
   if (saved) state=Life.load(saved);
@@ -36,7 +35,6 @@ function start() {
   if (state && !state.dead && !window.confirm('Заменить текущее прохождение новой жизнью?')) return;
   state=Life.create();
   page='life';
-  last='';
   save();
   render();
 }
@@ -54,15 +52,31 @@ function card(title) {
 const labels={health:'Здоровье',mood:'Настроение',study:'Успеваемость',skill:'Навыки',
   social:'Связи',family:'Близость с семьёй',bond:'Отношения с партнёром',cash:'Деньги',wage:'Доход'};
 function decision(index) {
-  const before={...state};
   if (!Life.decide(state,index)) return;
-  const changes=Object.entries(labels).flatMap(([field,label])=>{
-    const delta=state[field]-before[field];
-    return delta?[label+' '+(delta>0?'+':'')+delta]:[];
-  });
-  last=changes.join(' · ');
   save();
   render(true);
+}
+function continueLife() {
+  if (!Life.proceed(state)) return;
+  save();
+  render(true);
+}
+function renderOutcome() {
+  const result=state.receipt;
+  const outcome=card('Что произошло');
+  outcome.classList.add('outcome');
+  outcome.append(element('p',result.choice,'meta'),element('p',result.text));
+  const changes=Object.entries(result.changes).map(([field,amount])=>
+    [labels[field],(amount>0?'+':'−')+Math.abs(amount)]);
+  if (changes.length) {
+    const details=element('details');
+    details.append(element('summary','Изменения параметров'),list(changes));
+    outcome.append(details);
+  }
+  const next=button('Продолжить',continueLife,'primary');
+  next.classList.add('continue');
+  outcome.append(next);
+  return outcome.querySelector('h2');
 }
 function render(focus=false) {
   main.replaceChildren();
@@ -83,12 +97,14 @@ function render(focus=false) {
   const heading=element('h1',page==='profile'?'Персонаж':page==='history'?'Дневник':state.name);
   identity.append(element('div',state.age===0?'Рождение · '+state.year:'Возраст · '+state.age,'meta'),heading);
   main.append(identity);
+  let focusTarget=heading;
   if (page==='history') {
     const timeline=element('ol','','timeline');
     for (const item of [...state.history].reverse()) {
       const entry=element('li');
       entry.append(element('small','Возраст · '+item.age,'meta'),
         element('p',item.title),element('p',item.detail,'muted'));
+      if (item.choice&&item.choice!==item.detail) entry.append(element('small','Выбор: '+item.choice));
       timeline.append(entry);
     }
     main.append(timeline);
@@ -104,6 +120,8 @@ function render(focus=false) {
       ['Положение',Life.status(state)],['Отношения',state.married?'В браке':state.partner?'Есть партнёр':'Без партнёра'],
       ['Дети',state.children]]));
     main.append(button('Начать новую жизнь',start));
+  } else if (state.receipt) {
+    focusTarget=renderOutcome();
   } else if (state.dead) {
     const summary=card('Итоговая биография');
     for (const line of Life.biography(state)) summary.append(element('p',line));
@@ -112,21 +130,22 @@ function render(focus=false) {
     main.append(element('p',Life.location(state)+' · Накопления '+state.cash+' ед.','muted'));
     const event=Life.current(state);
     const scene=card(event.title);
-    scene.append(element('p',event.body,'muted'));
+    for (const paragraph of Life.sceneText(state,event)) scene.append(element('p',paragraph,'scene-text'));
     const choices=element('div','','choices');
     event.choices.forEach((choice,index)=>{
       const option=button(choice.label,()=>decision(index));
-      option.disabled=!choice.allowed(state);
-      if (option.disabled) option.append(element('small',choice.reason));
+      const reason=Life.blocked(state,event,choice);
+      option.disabled=Boolean(reason);
+      if (reason) option.append(element('small',reason));
       choices.append(option);
     });
     scene.append(choices);
-    if (last) main.append(element('p','После решения и течения времени · '+last,'muted'));
+    focusTarget=scene.querySelector('h2');
   }
   window.scrollTo(0,0);
   if (focus) {
-    heading.tabIndex=-1;
-    heading.focus({preventScroll:true});
+    focusTarget.tabIndex=-1;
+    focusTarget.focus({preventScroll:true});
   }
 }
 nav.addEventListener('click',event=>{

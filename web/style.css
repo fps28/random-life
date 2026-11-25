@@ -30,3 +30,12 @@ dd { margin:0; text-align:right; }
 .timeline li { padding:12px 0; border-bottom:1px solid #48434c; }
 .timeline p { margin:0; }
 #status { color:#f4c987; }
+.scene-text { line-height:1.65; max-width:62ch; }
+.outcome { border-color:#806e5c; }
+.outcome details { color:#d2c5be; margin:14px 0; }
+.outcome summary { cursor:pointer; padding:8px 0; }
+.outcome details dl { margin-top:8px; }
+.continue { display:block; width:100%; text-align:center; }
+.choices button { overflow-wrap:anywhere; }
+.choices button:disabled { opacity:1; background:#262833; color:#d2c5be; }
+.choices button small { line-height:1.45; }
