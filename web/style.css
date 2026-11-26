@@ -39,3 +39,8 @@ dd { margin:0; text-align:right; }
 .choices button { overflow-wrap:anywhere; }
 .choices button:disabled { opacity:1; background:#262833; color:#d2c5be; }
 .choices button small { line-height:1.45; }
+
+.world-news { border-color:#806e5c; }
+.news-item h3 { margin:10px 0 2px; font-size:1rem; }
+.news-item p { margin-bottom:6px; }
+.news-item + .news-item { border-top:1px solid #48434c; padding-top:7px; margin-top:12px; }

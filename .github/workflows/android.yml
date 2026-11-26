@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Проверить механику игры
-        run: node --test test/engine.test.js
+        run: node --test test/*.test.js
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

@@ -50,7 +50,7 @@ function card(title) {
   return section;
 }
 const labels={health:'Здоровье',mood:'Настроение',study:'Успеваемость',skill:'Навыки',
-  social:'Связи',family:'Близость с семьёй',bond:'Отношения с партнёром',cash:'Деньги',wage:'Доход'};
+  social:'Связи',family:'Близость с семьёй',bond:'Отношения с партнёром',cash:'Деньги',wage:'Доход',debt:'Долг'};
 function decision(index) {
   if (!Life.decide(state,index)) return;
   save();
@@ -77,6 +77,16 @@ function renderOutcome() {
   next.classList.add('continue');
   outcome.append(next);
   return outcome.querySelector('h2');
+}
+function renderNews() {
+  if (!state.news.length) return;
+  const news=card('Что изменилось');
+  news.classList.add('world-news');
+  for (const item of state.news) {
+    const section=element('div','','news-item');
+    section.append(element('h3',item.title),element('p','Возраст · '+item.age,'meta'),element('p',item.detail));
+    news.append(section);
+  }
 }
 function render(focus=false) {
   main.replaceChildren();
@@ -116,9 +126,13 @@ function render(focus=false) {
     card('Характеристики').append(list(Life.stats.filter(k=>k!=='bond'||state.partner).map(k=>[labels[k],state[k]+' / 100'])));
     card('Обстоятельства').append(list([
       ['Образование',state.edu],['Занятие',state.job],['Доход в год',state.wage+' ед.'],
-      ['Накопления',state.cash+' ед.'],['Жильё',state.home?'Собственное':state.independent?'Аренда':'С семьёй'],
+      ['Накопления',state.cash+' ед.'],['Долг',state.debt+' ед.'],
+      ['Жильё',({owned:'Собственное',family:'С семьёй',rent:'Аренда',shelter:'Временное жильё',lost:'Без жилья'})[state.housing]],
       ['Положение',Life.status(state)],['Отношения',state.married?'В браке':state.partner?'Есть партнёр':'Без партнёра'],
-      ['Дети',state.children]]));
+      ['Дети',state.children],
+      ...(state.record?[['Судимость','Есть']]:[]),
+      ...(state.disabled?[['Здоровье','Стойкие ограничения']]:[]),
+      ...(state.addiction?[['Зависимость',state.addiction>=2?'Сказывается на быту':'Восстановление']]:[])]));
     main.append(button('Начать новую жизнь',start));
   } else if (state.receipt) {
     focusTarget=renderOutcome();
@@ -127,6 +141,7 @@ function render(focus=false) {
     for (const line of Life.biography(state)) summary.append(element('p',line));
     main.append(button('Начать новую жизнь',start,'primary'));
   } else {
+    renderNews();
     main.append(element('p',Life.location(state)+' · Накопления '+state.cash+' ед.','muted'));
     const event=Life.current(state);
     const scene=card(event.title);

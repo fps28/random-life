@@ -41,6 +41,8 @@ public final class MainActivity extends Activity {
                         case "/index.html": type = "text/html"; break;
                         case "/style.css": type = "text/css"; break;
                         case "/events.js":
+                        case "/branches.js":
+                        case "/world.js":
                         case "/engine.js":
                         case "/app.js": type = "application/javascript"; break;
                         default: return missing();

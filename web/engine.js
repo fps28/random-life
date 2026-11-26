@@ -1,5 +1,14 @@
 (function (root) {
-  const events = typeof module === 'undefined' ? root.LifeEvents : require('./events');
+  const catalog = typeof module === 'undefined' ? root.LifeEvents : require('./events');
+  const branches = typeof module === 'undefined' ? root.LifeBranches : require('./branches');
+  const world = typeof module === 'undefined' ? root.LifeWorld : require('./world');
+  const events=[...catalog,...branches];
+  const byId=new Map(events.map(event=>[event.id,event]));
+  const urgent=new Set(['education','degree','retire','dropout','symptoms','trial','release','evicted','default','discovery','rehab']);
+  const branchIds=new Set(branches.map(event=>event.id));
+  const physicallyDemanding=new Set(['Сменная работа','Полставки','Временные смены']);
+  const employmentEvents=new Set(['promotion','burnout','layoff','relocation','familytime','market']);
+  const ageAtDecision=(s,id)=>s.history.find(item=>item.eventId===id)?.age;
   const places = [
     ['Россия','Казань','Екатеринбург',['Артём','Михаил','Илья'],['Анна','София','Мария']],
     ['Япония','Осака','Нагоя',['Харуто','Рэн','Юта'],['Юи','Рин','Хина']],
@@ -19,8 +28,8 @@
   const pick = (s,list) => list[range(s,0,list.length-1)];
   const log = (s,title,detail) => s.history.push({age:s.age,title,detail});
   const location = s => places[s.region][s.city] + ', ' + places[s.region][0];
-  const current = s => events.find(e=>e.id===s.event);
-  const decisionFields = [...stats,'cash','wage'];
+  const current = s => byId.get(s.event);
+  const decisionFields = [...stats,'cash','wage','debt'];
   const prior = (s,id) => s.history.find(item=>item.eventId===id);
   const sceneContext = {
     birth: s => s.tier===0 ? 'В семейном бюджете сейчас почти нет запаса, и лишняя пара рук могла бы пригодиться.' :
@@ -30,14 +39,20 @@
     exam: s => s.study<48 ? 'На последней контрольной ты оставил несколько задач пустыми. Летнее расписание может это изменить.' : '',
     movehome: s => s.wage>0 ? 'Первый заработок делает переезд реальным, но теперь надо решить, сколько дохода отдавать за комнату.' : '',
     degree: s => s.independent ? 'Аренду нужно платить и в месяцы, когда всё время отнимает учёба.' : '',
-    job: s => s.leftStudy ? 'Учёба осталась без защиты. В резюме сейчас проще опереться на опыт, который дали первые смены.' :
+    job: s => s.record ? 'В одной из анкет есть обязательная проверка биографии: судимость закроет эту вакансию, но не всю работу.' :
+      s.schoolLost ? 'Аттестата у тебя нет. Сейчас проще искать работу, где можно доказать навыки на месте.' :
+      s.leftStudy ? 'Учёба осталась без защиты. В резюме сейчас проще опереться на опыт, который дали первые смены.' :
       s.edu==='Высшее' ? 'Ты уже можешь приложить диплом к отклику на работу специалиста.' :
       s.edu==='Среднее профессиональное' ? 'Практику из колледжа можно показать на собеседовании, даже если потребуется ещё чему-то научиться.' : '',
     friendcall: s => prior(s,'friend')?.choiceIndex===2 ? 'На экране всё ещё то самое имя: вместе вы когда-то возились над одним проектом вечерами.' : '',
     rent: s => s.children ? 'В семейном бюджете уже есть расходы на ребёнка. Пересчёт аренды затрагивает и их.' : '',
     child: s => s.married ? 'После регистрации брака обсуждать общие расходы стало привычнее. Этот разговор всё равно даётся иначе.' : '',
     promotion: s => s.network ? 'Твою работу помнят со стажировки. Один из тех, кто знает тебя с тех пор, готов поручиться.' : '',
-    relocation: s => s.home ? 'В нынешнем городе у тебя своя квартира. Её судьба тоже входит в решение.' : '',
+    relocation: s => [
+      s.partner?'Партнёр не обещает, что сможет переехать вместе с тобой.':'',
+      s.debt?'Даже после переезда останется долг, на который каждый год нужен отдельный взнос.':'',
+      s.home?'В нынешнем городе у тебя своя квартира. Её судьба тоже входит в решение.':''
+    ].filter(Boolean).join(' '),
     burnout: s => s.job==='Руководитель' ? 'После повышения вопросы, которые вечером можно было оставить на завтра, чаще остаются за тобой.' : '',
     crisis: s => s.children ? 'После семейных дел свободные вечера стали редкостью, и каждому кажется, что другой давно это принял.' : '',
     venture: s => s.edu==='Школьное'&&s.skill>=50 ? 'Заказчик смотрел на твои работы. Навыков, которые ты набрал на практике, хватило для этого разговора.' : '',
@@ -53,7 +68,22 @@
     const context=sceneContext[event.id]?.(s);
     return context ? [event.body,context] : [event.body];
   }
+  function lifeRestriction(s,event,option) {
+    const {effects}=option;
+    if (event.id==='job' && effects.job==='Специалист') {
+      if (s.record) return 'Для этой должности проверяют судимость. Её уже нельзя убрать из этой биографии; доступны другие вакансии.';
+      if (s.schoolLost) return 'Ты ушёл из школы без аттестата, а эту анкету без него не принимают. Можно получить документ в вечерней школе или пока идти в мастерскую.';
+    }
+    if (s.bankrupt && effects.debt) return 'После банкротства этот кредитор не выдаёт тебе новый заём. Остаются варианты без кредита.';
+    if (s.record && effects.move==='foreign') return 'Для этой вакансии нужна справка без судимости. Этот путь закрыт, но короткая работа из дома доступна.';
+    if (s.disabled && (physicallyDemanding.has(effects.job)||effects.move)) {
+      return 'После травмы или болезни прежняя нагрузка тебе недоступна. Здесь можно выбрать более гибкую работу или остаться на месте.';
+    }
+    return '';
+  }
   function blocked(s,event,option) {
+    const restriction=lifeRestriction(s,event,option);
+    if (restriction) return restriction;
     if (option.allowed(s)) return '';
     const {effects}=option;
     const reasons=[];
@@ -63,7 +93,7 @@
         'По выпускным результатам ты не проходишь университетский отбор.');
       reasons.push('Сейчас доступны колледж и работа. Позже можно набрать практический опыт и повысить квалификацию на курсах.');
     }
-    if (event.id==='job') reasons.push(s.leftStudy ?
+    if (event.id==='job'&&effects.job==='Специалист') reasons.push(s.leftStudy ?
       'Ты ушёл до защиты, поэтому диплома нет. Опыт пока тоже не заменяет его. Практическая работа и вечерние курсы помогут набрать нужные навыки.' :
       'Работодатель просит вузовский диплом или более уверенный практический опыт. Его можно набрать на работе с обучением и на вечерних курсах.');
     if (event.id==='promotion') reasons.push('Для руководящей роли не хватает опыта или рекомендации от человека, который видел твою работу. Попробуй начать с отдельного проекта.');
@@ -82,7 +112,7 @@
     return reasons.join(' ') || option.reason;
   }
   function create(seed = Math.floor(Math.random()*4294967296)) {
-    const s = {version:2,receipt:null,rng:seed>>>0,age:0,city:1,year:new Date().getFullYear(),history:[],seen:[],dead:false};
+    const s = {version:3,receipt:null,rng:seed>>>0,age:0,city:1,year:new Date().getFullYear(),history:[],seen:[],dead:false};
     s.region = range(s,0,places.length-1);
     const place = places[s.region];
     s.city = range(s,1,2);
@@ -97,6 +127,7 @@
       social:range(s,28,49),family:range(s,43,62),bond:0,cash:0,wage:0,habit:0,
       children:0,edu:'Дошкольное',job:'Без работы',event:'birth',work:0,investmentAge:0
     });
+    world.init(s,roll,true);
     log(s,'Рождение',s.born + '. ' + strata[tier] + '.');
     return s;
   }
@@ -107,7 +138,12 @@
       else if (key==='habit') s.habit+=value;
       else if (key==='wageAdd') s.wage=Math.max(0,s.wage+value);
       else if (key==='graduate') s.edu=s.edu==='В университете'?'Высшее':'Среднее профессиональное';
-      else if (key==='split') Object.assign(s,{partner:false,married:false,bond:0});
+      else if (key==='split') Object.assign(s,{partner:false,married:false,bond:0,estranged:true,betrayed:false});
+      else if (key==='insolvency') world.insolvency(s);
+      else if (key==='debtAdd') s.debt+=value;
+      else if (key==='debtPay') s.debt=Math.max(0,s.debt-value);
+      else if (key==='caseDelay') s.caseAge=s.age+value;
+      else if (key==='verdict') Object.assign(s,{verdict:value,verdictAge:s.age+1,caseStatus:'pending'});
       else if (key==='investment') s.investmentAge=s.age+4;
       else if (key==='move') {
         if (value==='local') s.city=s.city===1?2:1;
@@ -116,9 +152,18 @@
           s.city=1;
         }
         s.independent=true;
+        s.housing='rent';
+        if (s.partner) s.bond=clamp(s.bond-9);
         log(s,'Переезд',location(s));
       } else s[key]=value;
     }
+    if (effects.home) s.housing='owned';
+    else if (effects.independent && !effects.housing && !effects.move && !s.home) s.housing='rent';
+  }
+  function report(s,title,detail) {
+    const item={age:s.age,title,detail,turningPoint:true};
+    s.history.push(item);
+    s.news.push(item);
   }
   function end(s,cause) {
     s.dead=true;
@@ -126,55 +171,80 @@
     s.cause=cause;
     log(s,'Конец жизни',cause);
   }
+  function compatible(s,event) {
+    if (s.prisonUntil) return false;
+    switch (event.id) {
+      case 'education': return !s.schoolLost;
+      case 'job': return !s.edu.startsWith('В ');
+      case 'placement': return !s.schoolLost && !s.disabled;
+      case 'promotion': return !s.careerPause && !s.record && !s.disabled;
+      case 'relocation': return s.wage>=4 && !s.business;
+      case 'emigration': return !s.business;
+      case 'movehome': return s.housing==='family';
+      case 'love': return !s.partner&&!s.estranged;
+      case 'retire': return s.wage>0;
+      case 'parents': return s.age<61;
+      case 'familytime': return !s.careerPause&&s.job!=='Работа на себя';
+      case 'childtime': return s.age-(ageAtDecision(s,'child')??s.age)>=5;
+      case 'grand': return s.age-(ageAtDecision(s,'child')??s.age)>=18;
+      case 'crisis': return s.bond<37;
+      case 'risk': return s.wage>0||s.cash>=5;
+      case 'venture': return s.job!=='Своё дело'&&s.skill>=25;
+      case 'home': return !s.bankrupt||s.cash>=15;
+      case 'rehab': return s.age>=18 && (!s.illness||s.illness!=='symptoms');
+      default: return !employmentEvents.has(event.id)||s.wage>0;
+    }
+  }
+  function selectScene(s) {
+    const candidates=events.filter(event=>s.age>=event.min&&s.age<=event.max&&!s.seen.includes(event.id)&&
+      compatible(s,event)&&event.when(s)&&event.choices.some(option=>!blocked(s,event,option)));
+    const milestone=candidates.find(event=>urgent.has(event.id));
+    if (milestone) return milestone;
+    if (s.age<s.nextScene||!candidates.length||roll(s)>.72) return null;
+    // Weight contextual branches without requiring every eligible event to occur.
+    const weighted=candidates.flatMap(event=>branchIds.has(event.id)?[event,event,event]:[event]);
+    return pick(s,weighted);
+  }
   function advance(s) {
     while (!s.dead) {
-      // Several eligible situations can occur in the same year.
-      const eligible = events.filter(e=>s.age>=e.min&&s.age<=e.max&&!s.seen.includes(e.id)&&e.when(s));
-      const deadline = eligible.find(e=>e.max===s.age);
-      if (deadline || eligible.length) {
-        s.event = (deadline || pick(s,eligible)).id;
+      if (s.health===0) {
+        end(s,'Жизнь закончилась после ухудшения здоровья.');
+        return;
+      }
+      const scene=selectScene(s);
+      if (scene) {
+        s.event=scene.id;
         return;
       }
       s.age++;
       if (s.age===6) s.edu='В школе';
       if (s.age===18) {
-        s.cash+= [4,9,17][s.tier];
-        log(s,'Семейная поддержка','Стартовый бюджет вырос на '+[4,9,17][s.tier]+' ед.');
-      }
-      if (s.age>18) {
-        const expenses = (s.home||!s.independent?1:3)+(s.children&&s.age<55?2:0);
-        const balance = s.cash+s.wage-expenses;
-        s.cash = Math.max(0,balance);
-        if (s.wage>0&&s.age<=65) s.work++;
-        if (balance<0&&s.independent) s.mood=clamp(s.mood-1);
+        const support=[1,8,24][s.tier];
+        s.cash+=support;
+        log(s,'Семейная поддержка','К совершеннолетию семья передаёт тебе '+support+' ед.');
       }
       if (s.age===s.investmentAge) {
-        const payout = roll(s)<Math.min(.8,.25+s.skill/180)?30:0;
+        const payout=roll(s)<Math.min(.8,.25+s.skill/180)?30:0;
         s.cash+=payout;
-        log(s,'Итог вложения', payout?'Кафе принесло 30 ед.':'Кафе закрылось. Вложение потеряно.');
+        report(s,'Итог вложения',payout?'Кафе принесло 30 ед.':'Кафе закрылось. Вложение потеряно.');
       }
       if (s.age===66&&s.reserve) {
         s.cash+=30;
-        log(s,'Пенсионный резерв','К накоплениям прибавилось 30 ед.');
+        report(s,'Пенсионный резерв','К накоплениям прибавилось 30 ед.');
       }
-      if (s.age>=48) {
-        const decline=(s.age>=74?2:1)-(s.age%3===0&&s.habit>0?1:0)
-          +(s.skippedCheckup&&s.age%4===0?1:0);
-        s.health=clamp(s.health-decline);
-      }
-      const risk = s.age<57 ? 0 : Math.max(0,(s.age-68)*.0025)+Math.max(0,55-s.health)*.0015;
-      if (s.age>=108 || s.health===0 || (risk>0&&roll(s)<risk)) {
-        end(s,s.health<35?'Здоровье постепенно ухудшилось.':'Жизнь завершилась в пожилом возрасте.');
-      }
+      const cause=world.year(s,roll,report,clamp);
+      if (cause) end(s,cause);
     }
   }
   function decide(s,index) {
     const event=current(s);
     const option=event?.choices[index];
-    if (s.dead||s.receipt||!option||!option.allowed(s)) return false;
+    if (s.dead||s.receipt||!option||blocked(s,event,option)) return false;
     const before={...s};
     const historyIndex=s.history.length;
+    s.news=[];
     apply(s,option.effects);
+    s.nextScene=s.age+(s.age<18?2:2+range(s,0,2));
     const changes={};
     for (const field of decisionFields) {
       const amount=s[field]-before[field];
@@ -185,7 +255,10 @@
       choice:option.label,choiceIndex:index,cashSpent:Math.max(0,-(changes.cash||0))
     });
     s.seen.push(event.id);
-    s.receipt={eventId:event.id,age:s.age,title:event.title,choice:option.label,text:option.outcome,changes};
+    const outcome=option.effects.move&&before.partner?
+      option.outcome+' Переезд даётся отношениям тяжело; вам приходится заново договариваться о времени вместе.':option.outcome;
+    s.history[historyIndex].detail=outcome;
+    s.receipt={eventId:event.id,age:s.age,title:event.title,choice:option.label,text:outcome,changes};
     return true;
   }
   function proceed(s) {
@@ -196,7 +269,7 @@
   }
   function load(raw) {
     const s=JSON.parse(raw);
-    if (!s || ![1,2].includes(s.version) || !Number.isInteger(s.age)|| s.age<0 || s.age>108 ||
+    if (!s || ![1,2,3].includes(s.version) || !Number.isInteger(s.age)|| s.age<0 || s.age>108 ||
         !Number.isInteger(s.rng)|| !places[s.region] || ![1,2].includes(s.city) ||
         !Array.isArray(s.history)|| !Array.isArray(s.seen)|| !stats.every(key=>Number.isFinite(s[key])) ||
         !Number.isFinite(s.cash)|| typeof s.edu!=='string'|| typeof s.name!=='string'||
@@ -215,6 +288,14 @@
       s.receipt=null;
       s.version=2;
     }
+    if (s.version===2) {
+      world.init(s,roll);
+      s.version=3;
+    }
+    if (!Array.isArray(s.news)||!Number.isFinite(s.debt)||s.debt<0||
+        !['family','rent','owned','lost','shelter'].includes(s.housing)) {
+      throw new Error('Сохранение содержит повреждённые данные о жизни.');
+    }
     if (s.receipt!==null && (!s.receipt||s.dead||s.receipt.eventId!==s.event||
         s.receipt.age!==s.age||typeof s.receipt.title!=='string'||typeof s.receipt.choice!=='string'||
         typeof s.receipt.text!=='string'||!s.receipt.changes||!s.seen.includes(s.event))) {
@@ -222,16 +303,20 @@
     }
     return s;
   }
-  const status = s => s.cash>=90 ? 'Обеспеченность' : s.social>=70 ? 'Широкий круг общения' :
-    s.cash<8&&s.age>=18 ? 'Ограниченный бюджет' : 'Умеренный достаток';
+  const status=s=>s.prisonUntil?'Заключение':s.housing==='lost'||s.housing==='shelter'?'Без постоянного жилья':
+    s.bankrupt?'После банкротства':s.debt>s.cash+10?'Долговая нагрузка':s.cash>=90?'Обеспеченность':
+    s.cash<8&&s.age>=18?'Ограниченный бюджет':s.social>=70?'Широкий круг общения':'Умеренный достаток';
   const biography = s => [
     s.name + ' · ' + s.age + ' лет жизни',
     'Место рождения — '+s.born+'. Последнее место жительства — '+location(s)+'.',
     'Образование — '+s.edu.toLowerCase()+'. Оплачиваемая работа до 65 лет — '+s.work+' лет.',
     'Семья — '+(s.married?'брак':s.partner?'есть партнёр':'без партнёра')+', детей — '+s.children+'.',
-    'Накопления — '+s.cash+' ед. '+(s.home?'Осталось собственное жильё.':''),
+    'Накопления — '+s.cash+' ед. Долг — '+s.debt+' ед. '+(s.home?'Осталось собственное жильё.':''),
+    ...(s.record?['Судимость осталась частью биографии.']:[]),
+    ...(s.disabled?['После ухудшения здоровья остались стойкие ограничения.']:[]),
+    ...(s.bankrupt?['В жизни было банкротство.']:[]),
     ...s.history.filter(item=>['Переезд','Итог вложения'].includes(item.title)||
-      ['friendback','businesscheck'].includes(item.eventId))
+      ['friendback','businesscheck','dropout','returnschool','default','discovery'].includes(item.eventId)||item.turningPoint)
       .map(item=>'В возрасте '+item.age+' лет · '+item.detail),
     s.cause
   ];
